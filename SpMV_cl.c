@@ -11,6 +11,8 @@
 
 #define MAX_S 10
 #define MIN_S 1
+#define ITERATIONS 3
+#define PRECISION 1e-9
 // gcc SpMV_cl.c mtx_sparse.c -fopenmp -O2 -I/usr/include/cuda -L/usr/lib64 -l:"libOpenCL.so.1" -o ou
 
 int generate_vector_s(double *vector, int vec_len){
@@ -21,17 +23,59 @@ int generate_vector_s(double *vector, int vec_len){
     }
     return 0;
 }
-int generate_vector_b(double *vector_s, double *vector_b, struct mtx_ELL mELL){
+int matrix_vector_product(struct mtx_ELL mELL, double *vector_s, double *vector_b){
     int el_in_row = mELL.num_elementsinrow;
     for(int i = 0; i < mELL.num_rows; i++){
         for(int j = 0; j < mELL.num_elementsinrow; j++){
-            //printf("%lf ", mELL.data[i*el_in_row + j]);
-            
-            //vector_b[i] += mELL.data[i*el_in_row + j] * vector_s[i*el_in_row + j];
+            int col_idx = mELL.col[i*el_in_row + j];
+            vector_b[i] += mELL.data[i*el_in_row + j] * vector_s[col_idx];
         }
     }
+    return 0;
 }
 
+int vector_vector_minus(double *vector1, double *vector2, int len, double *vec_out){
+    for(int i = 0; i < len; i++){
+        vec_out[i] = vector1[i] - vector2[i];
+    }
+    return 0;
+}
+
+double vectorT_vector_product(double *vector_1, double *vector_2, int len){
+    double product = 0;
+    for(int i = 0; i < len; i++){
+        product += vector_1[i] *vector_2[i];
+    }
+    return product;
+}
+
+int copy_vector(double *vector1, double *vector2, int len){
+    for(int i = 0; i < len; i++){
+        vector2[i] = vector1[i];
+    }
+    return 0;
+}
+
+int scalar_vector_product(double coef, double *vector, int len, double *vec_out){
+    for(int i = 0; i < len; i++){
+        vec_out[i] = coef * vector[i];
+    }
+    return 0;
+}
+
+int vector_vector_plus(double *vector1, double *vector2, int len, double *vec_out){
+    for(int i = 0; i < len; i++){
+        vec_out[i] = vector1[i] + vector2[i];
+    }
+    return 0;
+}
+
+int print_vector(double *vector, int len){
+    for(int i = 0; i < len; i++){
+        printf("%ld\n", vector[i]);
+    }
+    return 0;
+}
 
 int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
 {
@@ -63,24 +107,83 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     
     mtx_CSR_create_from_mtx_COO(&mCSR, &mCOO);
     mtx_ELL_create_from_mtx_CSR(&mELL, &mCSR);
-    // 1. generate random solution s. Find coresponding vector b. s = random. b = A*s
+    // 1. generate random solution s. Find coresponding vector b. s = random, b = A*s
     // 2. generate starting vector --> Vector of ones.
 
     // 1:
     double *vector_s = (double *)calloc(mELL.num_cols, sizeof(double));
     double *vector_b = (double *)calloc(mELL.num_cols, sizeof(double));
     generate_vector_s(vector_s, mELL.num_cols);
-    generate_vector_b(vector_s, vector_b, mELL); //A*s
-/*
+    matrix_vector_product(mELL, vector_s, vector_b); //A*s, generate vector b.
+    
     for(int i = 0; i < mELL.num_cols; i++){
-        printf("%lf ", vector_s[i]);
+        printf("%lf -- %lf\n",vector_s[i],vector_b[i]);
     }
-*/
-    /* for(int i = 0; i < mELL.num_elements; i++){
-        printf("%lf ", mELL.data[i]);
-    } */
-    for(int i = 0; i < mELL.num_elements; i++){
-        printf("%lf ", mELL.data[i]);
+
+    // 2. Inicialize starting vector of ones X0
+    
+    double *vector_x = (double *)calloc(mELL.num_cols, sizeof(double));
+    for(int i = 0; i < mELL.num_cols; i++){
+        vector_x[i] = 50;
+    }
+    
+    double *vector_temp= (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_r = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_p = (double *)calloc(mELL.num_cols, sizeof(double));
+    matrix_vector_product(mELL, vector_x, vector_temp); // A*x
+    vector_vector_minus(vector_b, vector_temp, mELL.num_cols, vector_r); // r = b- A*x
+    
+    
+    copy_vector(vector_r, vector_p, mELL.num_cols); // r -> p
+    // todo --> check how many iterations and precision needed
+    double precision_curr = 0;
+    double coef_alpha = 0;
+    double coef_alpha_denom = 0;
+    double coef_beta = 0;
+    double coef_beta_num = 0;
+
+    double *vector_Ap = (double *)calloc(mELL.num_cols, sizeof(double)); // A*p(k)
+    double *vector_beta_num = (double *)calloc(mELL.num_cols, sizeof(double));
+
+    double *vector_alpha_p = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_beta_p = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_alpha_A_p = (double *)calloc(mELL.num_cols, sizeof(double));
+
+    int k = 0;
+    float prec = 1e-9;
+    while(k < ITERATIONS){
+        precision_curr = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
+        printf("prec_curr: %lf\n", precision_curr);
+        if(precision_curr <= prec){
+            break;
+        }
+        matrix_vector_product(mELL, vector_p, vector_Ap);
+        coef_alpha_denom = vectorT_vector_product(vector_p, vector_Ap, mELL.num_cols);
+        coef_alpha = precision_curr / coef_alpha_denom;
+        printf("alpha: %lf\n", coef_alpha);
+
+        scalar_vector_product(coef_alpha, vector_p, mELL.num_cols, vector_alpha_p);
+        vector_vector_plus(vector_x, vector_alpha_p, mELL.num_cols, vector_x);
+        
+        scalar_vector_product(coef_alpha, vector_Ap, mELL.num_cols, vector_alpha_A_p);
+        vector_vector_minus(vector_r, vector_alpha_A_p, mELL.num_cols, vector_r);
+
+        coef_beta_num = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
+        coef_beta = coef_beta_num / precision_curr;
+        printf("beta: %lf\n",coef_beta );
+        
+        scalar_vector_product(coef_beta, vector_p, mELL.num_cols, vector_beta_p);
+        vector_vector_plus(vector_r, vector_beta_p, mELL.num_cols, vector_p);
+        
+        k++;
+    }
+    /* printf("Exact solution:\n");
+    print_vector(vector_s, mELL.num_cols);
+
+    printf("Aproximate solution of x:\n");
+    print_vector(vector_x, mELL.num_cols); */
+    for(int i = 0; i < mELL.num_cols; i++){
+        printf("%lf -- %lf\n",vector_s[i],vector_x[i]);
     }
 
 
