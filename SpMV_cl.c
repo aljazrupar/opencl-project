@@ -9,8 +9,8 @@
 #define WORKGROUP_SIZE 1024
 #define REPEAT 1000
 
-#define MAX_S 20
-#define MIN_S -20
+#define MAX_S 100
+#define MIN_S -100
 #define PRECISION 1e-10
 // finite number of iterations, which is not larger than the size of the matrix
 // gcc SpMV_cl.c mtx_sparse.c -fopenmp -O2 -I/usr/include/cuda -L/usr/lib64 -l:"libOpenCL.so.1" -o ou
@@ -186,10 +186,10 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
         vector_vector_plus(vector_r, vector_beta_p, mELL.num_cols, vector_p);
         k++;
 
-        printf("------------\n");
-        for(int i = 0; i < mELL.num_cols; i++){
+        //printf("------------\n");
+        /* for(int i = 0; i < mELL.num_cols; i++){
         printf("-- %lf\n",vector_x[i]);
-        }
+        } */
     }
 
     for(int i = 0; i < mELL.num_cols; i++){
