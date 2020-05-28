@@ -12,6 +12,8 @@
 #define MAX_S 10
 #define MIN_S -10
 #define PRECISION 1e-10
+
+#define JAGPADD 1
 // finite number of iterations, which is not larger than the size of the matrix
 // gcc SpMV_cl.c mtx_sparse.c -fopenmp -O2 -I/usr/include/cuda -L/usr/lib64 -l:"libOpenCL.so.1" -o ou
 
@@ -112,7 +114,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     
     mtx_CSR_create_from_mtx_COO(&mCSR, &mCOO);
     mtx_ELL_create_from_mtx_CSR(&mELL, &mCSR);
-    mtx_JDS_create_from_mtx_CSR(&mJDS, &mCSR);
+    mtx_JDS_create_from_mtx_CSR(&mJDS, &mCSR, JAGPADD);
     /* for(int i = 0; i < mELL.num_elements; i++){
         printf("%lf - ", mELL.data[i]);
     }
@@ -215,8 +217,8 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     } */
 
 
-/*
     // allocate vectors
+    /*
     double *vecIn = (double *)malloc(mCOO.num_cols * sizeof(double));
     for (int i = 0; i < mCOO.num_cols; i++)
         vecIn[i] = 1.0;
@@ -455,6 +457,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     free(vecOutCSR_cl);
     free(vecOutELL_cl);
 */
+
     mtx_COO_free(&mCOO);
     mtx_CSR_free(&mCSR);
     mtx_ELL_free(&mELL);

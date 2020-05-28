@@ -45,6 +45,7 @@ struct mtx_JDS
     int num_of_jags_nonzero; // num of non zero rows
     int size_of_jaggged_ptr; // size of jagged_ptr
     int jds_rows; // number of rows stored in JDS.
+    int jag_padd;
     int num_nonzeros; // size of data and col.
     int num_rows; // all row
     int num_cols; // all col
@@ -59,7 +60,7 @@ int mtx_CSR_free(struct mtx_CSR *mCSR);
 int mtx_ELL_create_from_mtx_CSR(struct mtx_ELL *mELL, struct mtx_CSR *mCSR);
 int mtx_ELL_free(struct mtx_ELL *mELL);
 
-int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR);
+int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR, int JAGPADD);
 int mtx_JDS_free(struct mtx_JDS *mJDS);
 
 #endif

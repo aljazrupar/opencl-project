@@ -150,7 +150,7 @@ int mtx_ELL_free(struct mtx_ELL *mELL)
     return 0;
 }
 
-int findAllNextMax(int *same_jag, int *el_per_row, int len){
+int findAllNextMax(int *same_jag, int *el_per_row, int len, int JAGPADD, int *arr_found_max){
     int curr_max_element = -1;
     for(int i = 0; i < len; i++){
         if(el_per_row[i] > curr_max_element){
@@ -162,25 +162,29 @@ int findAllNextMax(int *same_jag, int *el_per_row, int len){
     }
     else{ // find all same
         int count = 0;
-
+        arr_found_max[1] = curr_max_element;
         for(int i = 0; i < len; i++){
-            if(curr_max_element == el_per_row[i]){
+            if(curr_max_element <= el_per_row[i] + JAGPADD && el_per_row[i] > 0){
                 same_jag[count] = i;
                 el_per_row[i] = -2;
                 count++;
             }
         }
+        arr_found_max[0] = count;
         return count;
     }
 }
 
-int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR)
+int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR, int JAGPADD)
 {
     mJDS->num_nonzeros = mCSR->num_nonzeros;
     mJDS->num_rows = mCSR->num_rows;
     mJDS->num_cols = mCSR->num_cols;
-    mJDS->data =  (double *)malloc(mCSR->num_nonzeros * sizeof(double));
-    mJDS->col = (int *)malloc(mCSR->num_nonzeros * sizeof(int));
+    mJDS->jag_padd = JAGPADD;
+
+    //tok je max, loh tut mn
+    mJDS->data =  (double *)malloc((mCSR->num_rows * mCSR->num_cols) * sizeof(double));
+    mJDS->col = (int *)malloc((mCSR->num_rows * mCSR->num_cols) * sizeof(int));
 
     //max sta tok kr je vrstic, lahko tudi manj!
     mJDS->row_permute = (int *)malloc(mCSR->num_rows * sizeof(int));
@@ -192,7 +196,8 @@ int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR)
     } 
 
     int *same_jag = (int *)malloc(mCSR->num_nonzeros * sizeof(int));
-    int found = findAllNextMax(same_jag, el_per_row, mJDS->num_rows);
+    int *arr_found_max = (int *)malloc(2 * sizeof(int));
+    int found = findAllNextMax(same_jag, el_per_row, mJDS->num_rows, JAGPADD, arr_found_max);
 
     mJDS->max_elementsinrow = mCSR->rowptr[same_jag[0]+1] - mCSR->rowptr[same_jag[0]];
 
@@ -202,11 +207,11 @@ int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR)
     int jag_count = 0;
     int col_major_count = 0;
 
-    int prev_jag_len = mCSR->rowptr[same_jag[0]+1] - mCSR->rowptr[same_jag[0]] - 1;
+    int prev_jag_len = arr_found_max[1] - 1;
 
     while(found){
-        
-        int curr_jag_len = mCSR->rowptr[same_jag[0]+1] - mCSR->rowptr[same_jag[0]];
+        // printf("found -> %d, max-> %d\n", arr_found_max[0], arr_found_max[1]);
+        int curr_jag_len = arr_found_max[1]; // curr max len, padd all to this one. 
         if(mCSR->rowptr[same_jag[0]+1] - mCSR->rowptr[same_jag[0]] == 0){
             break;
         }
@@ -221,23 +226,36 @@ int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR)
         for(int i = 0; i < found; i++){
             // printf("%d, found : %d\n", same_jag[i], found);
             mJDS->row_permute[row_permute_count] = same_jag[i];
+
+            int curr_found_len = mCSR->rowptr[same_jag[i]+1] - mCSR->rowptr[same_jag[i]];
             
+            int diff = arr_found_max[1] - curr_found_len; // difference between max and curr in found.
+            // printf("curr: %d, curr_found: %d, diff--> %d\n",arr_found_max[1],curr_found_len, diff);
             col_major_count = 0;
-            for(int j = mCSR->rowptr[same_jag[i]]; j < mCSR->rowptr[same_jag[i]+1]; j++){
+            for(int j = mCSR->rowptr[same_jag[i]]; j < mCSR->rowptr[same_jag[i]+1] + diff; j++){
+                if(j >= mCSR->rowptr[same_jag[i]+1]){ // add zero
+                    mJDS->data[data_count + col_major_count*found+i] = 0;
+                    mJDS->col[data_count + col_major_count*found+i] = 0;
+                }
+                else{
+                    mJDS->data[data_count + col_major_count*found+i] = mCSR->data[j];
+                    mJDS->col[data_count + col_major_count*found+i] = mCSR->col[j];
+                }
                 
-                mJDS->data[data_count + col_major_count*found+i] = mCSR->data[j];
-                mJDS->col[data_count + col_major_count*found+i] = mCSR->col[j];
                 col_major_count++;
             }
+            
+
+
             row_permute_count++;
         }
 
 
-        prev_jag_len = mCSR->rowptr[same_jag[0]+1] - mCSR->rowptr[same_jag[0]];
+        prev_jag_len = curr_jag_len;
         data_count += col_major_count*found;
         
 
-        found = findAllNextMax(same_jag, el_per_row, mJDS->num_rows);
+        found = findAllNextMax(same_jag, el_per_row, mJDS->num_rows,JAGPADD, arr_found_max);
         
         // printf("---\n");
         jag_pointer_count++;
@@ -247,7 +265,7 @@ int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR)
     mJDS->num_of_jags_nonzero = jag_count;
     mJDS->size_of_jaggged_ptr = jag_pointer_count;
     mJDS->jds_rows = row_permute_count;
-    /* 
+    
     for(int i = 0; i < data_count; i++){
         printf("data: %lf - %d\n", mJDS->data[i], mJDS->col[i]);
     }
@@ -256,7 +274,8 @@ int mtx_JDS_create_from_mtx_CSR(struct mtx_JDS *mJDS, struct mtx_CSR *mCSR)
     }
     for(int i = 0; i < jag_pointer_count+1; i++){
         printf("jag_pointer: %d\n", mJDS->jagged_ptr[i]);
-    } */
+    }
+
     
     free(same_jag);
     return 0;
