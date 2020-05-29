@@ -122,157 +122,19 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     for(int i = 0; i < mELL.num_elements; i++){
         printf("%d - ", mELL.col[i]);
     } */
-    // number of iterations must be size of matrix
-    int iter = 40;
-    double *vector_s = (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_b = (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_temp= (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_r = (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_p = (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_Ap = (double *)calloc(mELL.num_cols, sizeof(double)); // A*p(k)
-    double *vector_beta_num = (double *)calloc(mELL.num_cols, sizeof(double));
 
-    double *vector_alpha_p = (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_beta_p = (double *)calloc(mELL.num_cols, sizeof(double));
-    double *vector_alpha_A_p = (double *)calloc(mELL.num_cols, sizeof(double));
 
-    
-    generate_vector_s(vector_s, mELL.num_cols);
-    matrix_vector_product(mELL, vector_s, vector_b); //A*s, generate vector b.
-    
-    // 2. Inicialize starting vector of ones X0
-    double *vector_x = (double *)calloc(mELL.num_cols, sizeof(double));
-    for(int i = 0; i < mELL.num_cols; i++){
-        vector_x[i] = 1;
-    }
-
-    
-    // wiki primer:
-    /* vector_b[0] = 1.00;
-    vector_b[1] = 2.00;
-    vector_x[0] = 2.00;
-    vector_x[1] = 1.00; */
-    
-    matrix_vector_product(mELL, vector_x, vector_temp); // A*x
-    vector_vector_minus(vector_b, vector_temp, mELL.num_cols, vector_r); // r = b- A*x
-    
-    copy_vector(vector_r, vector_p, mELL.num_cols); // r -> p
-    
-    double precision_curr = 0;
-    double coef_alpha = 0;
-    double coef_alpha_denom = 0;
-    double coef_beta = 0;
-    double coef_beta_num = 0;
 
     
 
-    int k = 0;
-    while(k < iter){
-        
-        precision_curr = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
-        //printf("k -> %d, prec_curr: %lf\n", k, precision_curr);
-        if(precision_curr <= PRECISION){
-            break;
-        }
-        
-        matrix_vector_product(mELL, vector_p, vector_Ap);
-        
-        coef_alpha_denom = vectorT_vector_product(vector_p, vector_Ap, mELL.num_cols);
-        coef_alpha = precision_curr / coef_alpha_denom;
-        // printf("alpha: %lf\n", coef_alpha);
+    // START OPENCL:
+    printf("Start OPENCL\n");
 
-        scalar_vector_product(coef_alpha, vector_p, mELL.num_cols, vector_alpha_p);
-        vector_vector_plus(vector_x, vector_alpha_p, mELL.num_cols, vector_x);
-        
-        /* for(int i = 0; i < mELL.num_cols; i++){
-            printf("alpha_p: %lf -", vector_alpha_p[i]);
-        } */
-        
-        scalar_vector_product(coef_alpha, vector_Ap, mELL.num_cols, vector_alpha_A_p);
-        /* for(int i = 0; i < mELL.num_cols; i++){
-            printf("alpha: %lf, Ap: %lf, alpha_Ap: %lf\n",coef_alpha,vector_Ap[i], vector_alpha_A_p[i]);
-        } */
-        
-        
-        vector_vector_minus(vector_r, vector_alpha_A_p, mELL.num_cols, vector_r); // r je ok
-        
-
-        coef_beta_num = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
-        coef_beta = coef_beta_num / precision_curr;
-        // printf("beta: %lf\n",coef_beta );
-        
-        scalar_vector_product(coef_beta, vector_p, mELL.num_cols, vector_beta_p);
-        
-        vector_vector_plus(vector_r, vector_beta_p, mELL.num_cols, vector_p);
-        
-        k++;
-
-        
-    }
-    //printf("k -> %d\n", k);
-
-    /* for(int i = 0; i < mELL.num_cols; i++){
-        printf("%lf -- %lf\n",vector_s[i],vector_x[i]);
-    } */
-
-
-    // allocate vectors
-    
-    double *vecIn = (double *)malloc(mCOO.num_cols * sizeof(double));
-    for (int i = 0; i < mCOO.num_cols; i++)
-        vecIn[i] = 1.0;
-    double *vecOutCOO_seq = (double *)calloc(mCOO.num_rows, sizeof(double));
-    double *vecOutCSR_seq = (double *)calloc(mCSR.num_rows, sizeof(double));
-    double *vecOutELL_seq = (double *)calloc(mELL.num_rows, sizeof(double));
-    double *vecOutCSR_cl = (double *)calloc(mCSR.num_rows, sizeof(double));
-    double *vecOutELL_cl = (double *)calloc(mELL.num_rows, sizeof(double));
-
-    // compute with COO
-    double dtimeCOO_seq = omp_get_wtime();
-    for (repeat = 0; repeat < REPEAT; repeat++)
-    {
-        for (int i = 0; i < mCOO.num_rows; i++)
-            vecOutCOO_seq[i] = 0.0;
-        for (int i = 0; i < mCOO.num_nonzeros; i++)
-            vecOutCOO_seq[mCOO.row[i]] += mCOO.data[i] * vecIn[mCOO.col[i]];
-    }
-    dtimeCOO_seq = omp_get_wtime() - dtimeCOO_seq;
-
-    // compute with CSR
-    double dtimeCSR_seq = omp_get_wtime();
-    for (repeat = 0; repeat < REPEAT; repeat++)
-    {
-        for (int i = 0; i < mCSR.num_rows; i++)
-            vecOutCSR_seq[i] = 0.0;
-        for (int i = 0; i < mCSR.num_rows; i++)
-            for (int j = mCSR.rowptr[i]; j < mCSR.rowptr[i + 1]; j++)
-                vecOutCSR_seq[i] += mCSR.data[j] * vecIn[mCSR.col[j]];
-    }
-    dtimeCSR_seq = omp_get_wtime() - dtimeCSR_seq;
-
-    // compute with ELL
-    double dtimeELL_seq = omp_get_wtime();
-    for (repeat = 0; repeat < REPEAT; repeat++)
-    {
-        for (int i = 0; i < mELL.num_rows; i++)
-            vecOutELL_seq[i] = 0.0;
-        for (int i = 0; i < mELL.num_rows; i++)
-            for (int j = 0; j < mELL.num_elementsinrow; j++)
-                vecOutELL_seq[i] += mELL.data[j * mELL.num_rows + i] * vecIn[mELL.col[j * mELL.num_rows + i]];
-    }
-    dtimeELL_seq = omp_get_wtime() - dtimeELL_seq;
-
-    /////////////////////////
-    // OpenCL code - start //
-    /////////////////////////
-
-    // Read kernel from file
     FILE *fp;
     char fileName[100];
     char *source_str;
     size_t source_size;
-
-    sprintf(fileName, "%s.cl", argv[1]);
+    sprintf(fileName,"%s.cl", argv[2]);
     fp = fopen(fileName, "r");
     if (!fp) 
 	{
@@ -283,20 +145,19 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
 	source_str[source_size] = '\0';
     fclose( fp );
-
+    
     // Get platforms
     cl_uint num_platforms;
     clStatus = clGetPlatformIDs(0, NULL, &num_platforms);
     cl_platform_id *platforms = (cl_platform_id *)malloc(sizeof(cl_platform_id)*num_platforms);
     clStatus = clGetPlatformIDs(num_platforms, platforms, NULL);
-
+    
     //Get platform devices
     cl_uint num_devices;
     clStatus = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices);
     num_devices = 1; // limit to one device
     cl_device_id *devices = (cl_device_id *)malloc(sizeof(cl_device_id)*num_devices);
     clStatus = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, num_devices, devices, NULL);
-
     // Context
     cl_context context = clCreateContext(NULL, num_devices, devices, NULL, NULL, &clStatus);
  
@@ -320,8 +181,135 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
         free(build_log);
         return 1;
     }
+    
 
+    // number of iterations must be size of matrix
+    int iter = mJDS.num_cols * mJDS.num_rows;
+    double *vector_s = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_b = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_temp= (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_r = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_p = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_Ap = (double *)calloc(mELL.num_cols, sizeof(double)); // A*p(k)
+    double *vector_beta_num = (double *)calloc(mELL.num_cols, sizeof(double));
 
+    double *vector_alpha_p = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_beta_p = (double *)calloc(mELL.num_cols, sizeof(double));
+    double *vector_alpha_A_p = (double *)calloc(mELL.num_cols, sizeof(double));
+
+    double *vecOutJDS = (double *)calloc(mJDS.num_rows, sizeof(double));
+    double *vector_zeros = (double *)calloc(mELL.num_rows, sizeof(double));
+
+    generate_vector_s(vector_s, mELL.num_cols);
+    matrix_vector_product(mELL, vector_s, vector_b); //A*s, generate vector b.
+    
+    // 2. Inicialize starting vector of ones X0
+    double *vector_x = (double *)calloc(mELL.num_cols, sizeof(double));
+    for(int i = 0; i < mELL.num_cols; i++){
+        vector_x[i] = 1;
+    }
+
+    double precision_curr = 0;
+    double coef_alpha = 0;
+    double coef_alpha_denom = 0;
+    double coef_beta = 0;
+    double coef_beta_num = 0;
+
+    
+    matrix_vector_product(mELL, vector_x, vector_temp); // A*x
+    vector_vector_minus(vector_b, vector_temp, mELL.num_cols, vector_r); // r = b- A*x
+    
+    copy_vector(vector_r, vector_p, mELL.num_cols); // r -> p
+    
+    // allocate memory on device and transfer data from host JDS - Each jag seperate
+    // Matrix-vector product
+
+    cl_mem mJDS_col = clCreateBuffer(context, CL_MEM_READ_ONLY, 
+                                      mJDS.data_arr_length * sizeof(cl_int), NULL, &clStatus);
+    cl_mem mJDS_data = clCreateBuffer(context, CL_MEM_READ_ONLY, 
+                                       mJDS.data_arr_length * sizeof(cl_double), NULL, &clStatus);
+
+    clStatus = clEnqueueWriteBuffer(command_queue, mJDS_col, CL_TRUE, 0,						
+                                    mJDS.data_arr_length * sizeof(cl_int), mJDS.col, 0, NULL, NULL);				
+    clStatus = clEnqueueWriteBuffer(command_queue, mJDS_data, CL_TRUE, 0,						
+                                    mJDS.data_arr_length * sizeof(cl_double), mJDS.data, 0, NULL, NULL);				
+    cl_mem mJDS_row_permute = clCreateBuffer(context, CL_MEM_READ_ONLY, 
+								    mJDS.jds_rows * sizeof(cl_int), NULL, &clStatus); 
+    clStatus = clEnqueueWriteBuffer(command_queue, mJDS_row_permute, CL_TRUE, 0,						
+                                    mJDS.jds_rows * sizeof(cl_int), mJDS.row_permute, 0, NULL, NULL);
+
+    // vectors
+    cl_mem vecIn = clCreateBuffer(context, CL_MEM_READ_ONLY, 
+								    mJDS.num_cols * sizeof(cl_double), vector_x, &clStatus); // set vecIn the one to be A * vector_x
+    clStatus = clEnqueueWriteBuffer(command_queue, vecIn, CL_TRUE, 0,						
+                                        mJDS.num_cols*sizeof(cl_double), vector_x, 0, NULL, NULL);	
+
+    cl_mem vecOut = clCreateBuffer(context, CL_MEM_READ_WRITE, 
+                                     mJDS.num_cols * sizeof(cl_double), NULL, &clStatus);
+    /* printf("cl stat1-> %d\n",clStatus);
+    clStatus = clEnqueueWriteBuffer(command_queue, vecOut, CL_TRUE, 0,						
+                                        mJDS.num_cols*sizeof(cl_double), vector_zeros, 0, NULL, NULL); */
+                                        
+    printf("cl stat2-> %d\n", clStatus);
+    // create kernel ELL and set arguments
+    cl_kernel kernelELL = clCreateKernel(program, "mELLxVec", &clStatus);
+    clStatus |= clSetKernelArg(kernelELL, 0, sizeof(cl_mem), (void *)&mJDS_col);
+    printf("cl stat4-> %d\n", clStatus);
+    clStatus |= clSetKernelArg(kernelELL, 1, sizeof(cl_mem), (void *)&mJDS_data);
+    printf("cl stat5-> %d\n", clStatus);
+    clStatus |= clSetKernelArg(kernelELL, 2, sizeof(cl_mem), (void *)&mJDS_row_permute);
+    printf("cl stat6-> %d\n", clStatus);
+    clStatus |= clSetKernelArg(kernelELL, 3, sizeof(cl_mem), (void *)&vecIn);
+    printf("cl stat7-> %d\n", clStatus);
+    clStatus |= clSetKernelArg(kernelELL, 4, sizeof(cl_mem), (void *)&vecOut);
+    printf("cl stat8-> %d\n", clStatus);
+    
+
+    // vecOut bo skos isti, notr je ++, pazi ce bos spremenu na paralelno enqueue kernel
+    int curr_jag_size = 0;
+    int low_limit = 0;
+    int upper_limit = 0;
+    int curr_jag_rows = 0;
+    int count_row_permute = 0;
+    int count_len = mJDS.max_elementsinrow; // count for every iteration, max len = 4, count_len = 4,3,2,1
+    for(int i = 0; i < mJDS.size_of_jaggged_ptr; i++){
+        printf("count_len--: %d\n", count_len);
+        low_limit = mJDS.jagged_ptr[i];
+        upper_limit = mJDS.jagged_ptr[i+1];
+        curr_jag_size = upper_limit - low_limit; // 8, 4
+        if(curr_jag_size == 0){
+            count_len--;
+            continue;
+        }
+        // printf("curr_jag_size: %d\n",curr_jag_size);
+        curr_jag_rows = curr_jag_size / count_len; // 2 vsakic v mojem primeru.
+        // printf("curr_jag_rows: %d\n", curr_jag_rows);
+        
+        clStatus |= clSetKernelArg(kernelELL, 5, sizeof(cl_int), (void *)&low_limit);
+        printf("cl stat9-> %d\n", clStatus);
+        clStatus |= clSetKernelArg(kernelELL, 6, sizeof(cl_int), (void *)&count_row_permute);
+        printf("cl stat10-> %d\n", clStatus);
+        clStatus |= clSetKernelArg(kernelELL, 7, sizeof(cl_int), (void *)&curr_jag_rows); // mELL.num_rows
+        printf("cl stat11-> %d\n", clStatus);
+        clStatus |= clSetKernelArg(kernelELL, 8, sizeof(cl_int), (void *)&count_len); // mELL.num_elementsinrow
+        printf("cl stat12-> %d\n", clStatus);
+        size_t local_item_size = WORKGROUP_SIZE; // 1024
+        int num_groups = ((curr_jag_rows - 1) / local_item_size + 1);
+        size_t global_item_size_ELL = num_groups * local_item_size; // 1024
+
+        clStatus = clEnqueueNDRangeKernel(command_queue, kernelELL, 1, NULL,						
+                                          &global_item_size_ELL, &local_item_size, 0, NULL, NULL);	
+        printf("cl stat12-> %d\n", clStatus);
+        count_row_permute += curr_jag_rows;
+        count_len--;
+    }
+
+    clStatus = clEnqueueReadBuffer(command_queue, vecOut, CL_TRUE, 0,						
+                                    mELL.num_rows*sizeof(cl_double), vecOutJDS, 0, NULL, NULL);
+    printf("cl stat6-> %d\n", clStatus);
+    for(int i = 0; i < mELL.num_rows; i++){
+        printf("result: %lf\n", vecOutJDS[i]);
+    }
 
 /*
     // allocate memory on device and transfer data from host CSR
@@ -330,29 +318,29 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     cl_mem mCSRcol_d = clCreateBuffer(context, CL_MEM_READ_ONLY, 
                                       mCSR.num_nonzeros * sizeof(cl_int),NULL, &clStatus);
     cl_mem mCSRdata_d = clCreateBuffer(context, CL_MEM_READ_ONLY, 
-                                       mCSR.num_nonzeros * sizeof(cl_float), NULL, &clStatus);
+                                       mCSR.num_nonzeros * sizeof(cl_double), NULL, &clStatus);
     clStatus = clEnqueueWriteBuffer(command_queue, mCSRrowptr_d, CL_TRUE, 0,						
                                     (mCSR.num_rows + 1) * sizeof(cl_int), mCSR.rowptr, 0, NULL, NULL);				
     clStatus = clEnqueueWriteBuffer(command_queue, mCSRcol_d, CL_TRUE, 0,						
                                     mCSR.num_nonzeros * sizeof(cl_int), mCSR.col, 0, NULL, NULL);				
     clStatus = clEnqueueWriteBuffer(command_queue, mCSRdata_d, CL_TRUE, 0,						
-                                    mCSR.num_nonzeros * sizeof(cl_float), mCSR.data, 0, NULL, NULL);				
+                                    mCSR.num_nonzeros * sizeof(cl_double), mCSR.data, 0, NULL, NULL);				
 
     // allocate memory on device and transfer data from host ELL
     cl_mem mELLcol_d = clCreateBuffer(context, CL_MEM_READ_ONLY, 
                                       mELL.num_elements * sizeof(cl_int), NULL, &clStatus);
     cl_mem mELLdata_d = clCreateBuffer(context, CL_MEM_READ_ONLY, 
-                                       mELL.num_elements * sizeof(cl_float), NULL, &clStatus);
+                                       mELL.num_elements * sizeof(cl_double), NULL, &clStatus);
     clStatus = clEnqueueWriteBuffer(command_queue, mELLcol_d, CL_TRUE, 0,						
                                     mELL.num_elements * sizeof(cl_int), mELL.col, 0, NULL, NULL);				
     clStatus = clEnqueueWriteBuffer(command_queue, mELLdata_d, CL_TRUE, 0,						
-                                    mELL.num_elements * sizeof(cl_float), mELL.data, 0, NULL, NULL);				
+                                    mELL.num_elements * sizeof(cl_double), mELL.data, 0, NULL, NULL);				
 
     // vectors
     cl_mem vecIn_d = clCreateBuffer(context, CL_MEM_READ_ONLY, 
-								    mCOO.num_cols * sizeof(cl_float), vecIn, &clStatus);
+								    mCOO.num_cols * sizeof(cl_double), vecIn, &clStatus);
     cl_mem vecOut_d = clCreateBuffer(context, CL_MEM_READ_WRITE, 
-                                     mCOO.num_rows * sizeof(cl_float), NULL, &clStatus);
+                                     mCOO.num_rows * sizeof(cl_double), NULL, &clStatus);
 
     //allocate memory on device and transfer data from host JDS
 
@@ -391,11 +379,11 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     for (repeat = 0; repeat < REPEAT; repeat++)
     {
         clStatus = clEnqueueWriteBuffer(command_queue, vecIn_d, CL_TRUE, 0,						
-                                        mCSR.num_cols*sizeof(cl_float), vecIn, 0, NULL, NULL);				
+                                        mCSR.num_cols*sizeof(cl_double), vecIn, 0, NULL, NULL);				
         clStatus = clEnqueueNDRangeKernel(command_queue, kernelCSR, 1, NULL,						
                                         &global_item_size_CSR, &local_item_size, 0, NULL, NULL);	
         clStatus = clEnqueueReadBuffer(command_queue, vecOut_d, CL_TRUE, 0,						
-                                        mCSR.num_rows*sizeof(cl_float), vecOutCSR_cl, 0, NULL, NULL);				
+                                        mCSR.num_rows*sizeof(cl_double), vecOutCSR_cl, 0, NULL, NULL);				
     }
     dtimeCSR_cl = omp_get_wtime()-dtimeCSR_cl;
 																						
@@ -404,11 +392,11 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     for (repeat = 0; repeat < REPEAT; repeat++)
     {
         clStatus = clEnqueueWriteBuffer(command_queue, vecIn_d, CL_TRUE, 0,						
-                                        mELL.num_cols*sizeof(cl_float), vecIn, 0, NULL, NULL);				
+                                        mELL.num_cols*sizeof(cl_double), vecIn, 0, NULL, NULL);				
         clStatus = clEnqueueNDRangeKernel(command_queue, kernelELL, 1, NULL,						
                                           &global_item_size_ELL, &local_item_size, 0, NULL, NULL);	
         clStatus = clEnqueueReadBuffer(command_queue, vecOut_d, CL_TRUE, 0,						
-                                    mELL.num_rows*sizeof(cl_float), vecOutELL_cl, 0, NULL, NULL);				
+                                    mELL.num_rows*sizeof(cl_double), vecOutELL_cl, 0, NULL, NULL);				
     }
     dtimeELL_cl = omp_get_wtime()-dtimeELL_cl;
 */

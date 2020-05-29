@@ -42,8 +42,9 @@ struct mtx_JDS
     int *jagged_ptr;
     int *row_permute;
     int max_elementsinrow;
-    int num_of_jags_nonzero; // num of non zero rows
-    int size_of_jaggged_ptr; // size of jagged_ptr
+    int data_arr_length;
+    int num_of_jags_nonzero; // num of jags
+    int size_of_jaggged_ptr; // size of jagged_ptr -1
     int jds_rows; // number of rows stored in JDS.
     int jag_padd;
     int num_nonzeros; // size of data and col.
