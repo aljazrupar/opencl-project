@@ -21,7 +21,7 @@ int generate_vector_s(double *vector, int vec_len){
     
     for(int i = 0; i < vec_len; i++){
         double new_num = rand() % (MAX_S + 1 - MIN_S) + MIN_S;
-        vector[i] = new_num;
+        vector[i] = i;
     }
     return 0;
 }
@@ -167,6 +167,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     
 
     int k = 0;
+    iter = 1;
     while(k < iter){
         
         precision_curr = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
@@ -176,8 +177,11 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
         }
         
         matrix_vector_product(mELL, vector_p, vector_Ap);
-        
+        /* for(int i = 0; i < mELL.num_cols; i++){
+            printf("AP-> %lf\n", vector_Ap[i]);
+        } */
         coef_alpha_denom = vectorT_vector_product(vector_p, vector_Ap, mELL.num_cols);
+        printf("coef_alpha_denom-> %lf\n",coef_alpha_denom);
         coef_alpha = precision_curr / coef_alpha_denom;
         // printf("alpha: %lf\n", coef_alpha);
 
@@ -217,7 +221,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
 
 
     // allocate vectors
-    
+    /* 
     double *vecIn = (double *)malloc(mCOO.num_cols * sizeof(double));
     for (int i = 0; i < mCOO.num_cols; i++)
         vecIn[i] = 1.0;
@@ -320,7 +324,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
         free(build_log);
         return 1;
     }
-
+ */
 
 
 /*
@@ -412,22 +416,22 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     }
     dtimeELL_cl = omp_get_wtime()-dtimeELL_cl;
 */
-    clStatus = clFlush(command_queue);
+    /* clStatus = clFlush(command_queue);
     clStatus = clFinish(command_queue);
-    /* clStatus = clReleaseKernel(kernelCSR);
-    clStatus = clReleaseKernel(kernelELL); */
+    clStatus = clReleaseKernel(kernelCSR);
+    clStatus = clReleaseKernel(kernelELL);
     clStatus = clReleaseProgram(program);
-    /* clStatus = clReleaseMemObject(mCSRrowptr_d);
+    clStatus = clReleaseMemObject(mCSRrowptr_d);
     clStatus = clReleaseMemObject(mCSRcol_d);
     clStatus = clReleaseMemObject(mCSRdata_d);
     clStatus = clReleaseMemObject(mELLcol_d);
     clStatus = clReleaseMemObject(mELLdata_d);
     clStatus = clReleaseMemObject(vecIn_d);
-    clStatus = clReleaseMemObject(vecOut_d); */
+    clStatus = clReleaseMemObject(vecOut_d);
     clStatus = clReleaseCommandQueue(command_queue);
     clStatus = clReleaseContext(context);
 	free(devices);
-    free(platforms);
+    free(platforms); */
 /* 
     ///////////////////////
     // OpenCL code - end //
