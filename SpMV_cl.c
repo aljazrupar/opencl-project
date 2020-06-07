@@ -76,13 +76,6 @@ int vector_vector_plus(double *vector1, double *vector2, int len, double *vec_ou
     return 0;
 }
 
-int print_vector(double *vector, int len){
-    for(int i = 0; i < len; i++){
-        printf("%ld\n", vector[i]);
-    }
-    return 0;
-}
-
 int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
 {
     FILE *f;
@@ -152,7 +145,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     vector_b[1] = 2.00;
     vector_x[0] = 2.00;
     vector_x[1] = 1.00; */
-    
+    double time = omp_get_wtime();
     matrix_vector_product(mELL, vector_x, vector_temp); // A*x
     vector_vector_minus(vector_b, vector_temp, mELL.num_cols, vector_r); // r = b- A*x
     
@@ -167,8 +160,8 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     
 
     int k = 0;
-    iter = 1;
-    while(k < iter){
+    iter = mELL.num_cols * mELL.num_rows;
+    while(k < 100){
         
         precision_curr = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
         //printf("k -> %d, prec_curr: %lf\n", k, precision_curr);
@@ -181,7 +174,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
             printf("AP-> %lf\n", vector_Ap[i]);
         } */
         coef_alpha_denom = vectorT_vector_product(vector_p, vector_Ap, mELL.num_cols);
-        printf("coef_alpha_denom-> %lf\n",coef_alpha_denom);
+        //printf("coef_alpha_denom-> %lf\n",coef_alpha_denom);
         coef_alpha = precision_curr / coef_alpha_denom;
         // printf("alpha: %lf\n", coef_alpha);
 
@@ -213,6 +206,18 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
 
         
     }
+
+    time = omp_get_wtime()-time;
+    int countErr = 0;
+    for(int i = 0; i < mELL.num_cols; i++){
+        if(abs(vector_s[i] - vector_x[i]) > 1){
+            countErr++;
+        }
+    }
+
+    printf("Errors-> %d\n",countErr);
+    printf("Time-> %lf\n",time);
+
     //printf("k -> %d\n", k);
 
     /* for(int i = 0; i < mELL.num_cols; i++){

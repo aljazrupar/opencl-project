@@ -13,23 +13,21 @@
 #define MIN_S -10
 #define PRECISION 1e-10
 
-#define JAGPADD 1
+#define JAGPADD 32
 // finite number of iterations, which is not larger than the size of the matrix
 // gcc SpMV_cl.c mtx_sparse.c -fopenmp -O2 -I/usr/include/cuda -L/usr/lib64 -l:"libOpenCL.so.1" -o ou
 
-
-// TODO------------- Spremeni vector v rand()!!!!
 int generate_vector_s(double *vector, int vec_len){
-    
+    srand(12345678);
     for(int i = 0; i < vec_len; i++){
         double new_num = rand() % (MAX_S + 1 - MIN_S) + MIN_S;
-        vector[i] = i;
+        vector[i] = new_num;
     }
     return 0;
 }
 int matrix_vector_product(struct mtx_ELL mELL, double *vector_s, double *vector_b){
     int el_in_row = mELL.num_elementsinrow;
-    for(int i = 0; i < mELL.num_rows; i++){ // Gre se enkrat cez za "brezveze". Mogoce bols z calloc nardit vsakic
+    for(int i = 0; i < mELL.num_rows; i++){
         vector_b[i] = 0;
     }
     for(int i = 0; i < mELL.num_rows; i++){
@@ -84,9 +82,6 @@ int print_vector(double *vector, int len){
     }
     return 0;
 }
-
-
-
 
 // OPENCL functions
 int matrix_vector_product_CL(struct mtx_JDS mJDS, double *vector_x, double *vector_temp, cl_context context, cl_command_queue command_queue, cl_kernel kernelELL){
@@ -184,6 +179,10 @@ double vectorT_vector_product_CL(double *vector_1, double *vector_2, int len, cl
 		dotProductOpenCL += p[i];
     }
 
+    clStatus = clReleaseMemObject(vec1);
+    clStatus = clReleaseMemObject(vec2);
+    clStatus = clReleaseMemObject(p_d);
+
     return dotProductOpenCL;
 }
 
@@ -244,25 +243,31 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     // Get platforms
     cl_uint num_platforms;
     clStatus = clGetPlatformIDs(0, NULL, &num_platforms);
+    
     cl_platform_id *platforms = (cl_platform_id *)malloc(sizeof(cl_platform_id)*num_platforms);
     clStatus = clGetPlatformIDs(num_platforms, platforms, NULL);
     
     //Get platform devices
     cl_uint num_devices;
     clStatus = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 0, NULL, &num_devices);
+    
     num_devices = 1; // limit to one device
     cl_device_id *devices = (cl_device_id *)malloc(sizeof(cl_device_id)*num_devices);
     clStatus = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, num_devices, devices, NULL);
     // Context
+    printf("%d\n",clStatus);
     cl_context context = clCreateContext(NULL, num_devices, devices, NULL, NULL, &clStatus);
- 
+    
     // Command queue
     cl_command_queue command_queue = clCreateCommandQueue(context, devices[0], 0, &clStatus);
-
+    
     // Create and build a program
+    
     cl_program program = clCreateProgramWithSource(context,	1, (const char **)&source_str, NULL, &clStatus);
+    
     clStatus = clBuildProgram(program, 1, devices, NULL, NULL, NULL);
-
+    
+    
 	// Log
 	size_t build_log_len;
 	char *build_log;
@@ -276,10 +281,9 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
         free(build_log);
         return 1;
     }
-
+    
     // number of iterations must be size of matrix
     // int iter = mJDS.num_cols * mJDS.num_rows;
-    int iter = 1;
     double *vector_s = (double *)calloc(mELL.num_cols, sizeof(double));
     double *vector_b = (double *)calloc(mELL.num_cols, sizeof(double));
     double *vector_temp= (double *)calloc(mELL.num_cols, sizeof(double));
@@ -296,6 +300,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     double *vector_zeros = (double *)calloc(mELL.num_rows, sizeof(double));
 
     generate_vector_s(vector_s, mELL.num_cols);
+    
     matrix_vector_product(mELL, vector_s, vector_b); //A*s, generate vector b.
     
     // 2. Inicialize starting vector of ones X0
@@ -303,6 +308,8 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     for(int i = 0; i < mELL.num_cols; i++){
         vector_x[i] = 1;
     }
+    
+    double time = omp_get_wtime();
 
     double precision_curr = 0;
     double coef_alpha = 0;
@@ -324,7 +331,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     clStatus = clEnqueueWriteBuffer(command_queue, mJDS_row_permute, CL_TRUE, 0,						
                                     mJDS.jds_rows * sizeof(cl_int), mJDS.row_permute, 0, NULL, NULL);
 
-    cl_kernel kernelELL = clCreateKernel(program, "mELLxVec", &clStatus);
+    cl_kernel kernelELL = clCreateKernel(program, "mJDSxVec", &clStatus);
     clStatus |= clSetKernelArg(kernelELL, 0, sizeof(cl_mem), (void *)&mJDS_col);
     // printf("cl stat4-> %d\n", clStatus);
     clStatus |= clSetKernelArg(kernelELL, 1, sizeof(cl_mem), (void *)&mJDS_data);
@@ -344,18 +351,17 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     copy_vector(vector_r, vector_p, mJDS.num_cols); // r -> p
 
     int k = 0;
-    iter = mJDS.num_cols * mJDS.num_rows;
+    int iter = 100;
     while(k < iter){
-        precision_curr = vectorT_vector_product_CL(vector_r, vector_r, mJDS.num_cols, context, command_queue, kernel_dot_product); // dela
+        // precision_curr = vectorT_vector_product_CL(vector_r, vector_r, mJDS.num_cols, context, command_queue, kernel_dot_product);
+        precision_curr = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
         if(precision_curr <= PRECISION){
             break;
         }
 
-        matrix_vector_product_CL(mJDS, vector_p, vector_Ap, context, command_queue, kernelELL); // dela
-        /* for(int i = 0; i < mJDS.num_cols; i++){
-            printf("AP-> %lf\n", vector_Ap[i]);
-        } */
-        coef_alpha_denom = vectorT_vector_product_CL(vector_p, vector_Ap, mJDS.num_cols, context, command_queue, kernel_dot_product); // dela
+        matrix_vector_product_CL(mJDS, vector_p, vector_Ap, context, command_queue, kernelELL); 
+        // coef_alpha_denom = vectorT_vector_product_CL(vector_p, vector_Ap, mJDS.num_cols, context, command_queue, kernel_dot_product); 
+        coef_alpha_denom = vectorT_vector_product(vector_p, vector_Ap, mELL.num_cols);
         coef_alpha = precision_curr / coef_alpha_denom;
 
         scalar_vector_product(coef_alpha, vector_p, mJDS.num_cols, vector_alpha_p);
@@ -365,7 +371,8 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
         vector_vector_minus(vector_r, vector_alpha_A_p, mELL.num_cols, vector_r);
 
 
-        coef_beta_num = vectorT_vector_product_CL(vector_r, vector_r, mJDS.num_cols, context, command_queue, kernel_dot_product);
+        // coef_beta_num = vectorT_vector_product_CL(vector_r, vector_r, mJDS.num_cols, context, command_queue, kernel_dot_product);
+        coef_beta_num = vectorT_vector_product(vector_r, vector_r, mELL.num_cols);
         coef_beta = coef_beta_num / precision_curr;
 
         scalar_vector_product(coef_beta, vector_p, mJDS.num_cols, vector_beta_p);
@@ -373,15 +380,22 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
 
         k++;
     }
+    time = omp_get_wtime()-time;
 
+    int countErr = 0;
     for(int i = 0; i < mELL.num_cols; i++){
-        printf("%lf -- %lf\n",vector_s[i],vector_x[i]);
+        if(abs(vector_s[i] - vector_x[i]) > 1){
+            countErr++;
+        }
+        
     }
-
+    printf("Errors-> %d\n",countErr);
+    printf("Time per iteration-> %lf\n",time/iter*1000);
 
     clStatus = clFlush(command_queue);
     clStatus = clFinish(command_queue);
     clStatus = clReleaseKernel(kernelELL);
+    clStatus = clReleaseKernel(kernel_dot_product);
     clStatus = clReleaseProgram(program);
     
     clStatus = clReleaseMemObject(mJDS_col);
@@ -397,6 +411,7 @@ int main(int argc, char *argv[]) // argv -> 0: matrix, 1: kernel, 3: precision
     mtx_COO_free(&mCOO);
     mtx_CSR_free(&mCSR);
     mtx_ELL_free(&mELL);
+    mtx_JDS_free(&mJDS);
 
 	return 0;
 }

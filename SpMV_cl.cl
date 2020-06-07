@@ -1,6 +1,6 @@
 // kernel
 
-__kernel void mELLxVec(__global const int *col,
+__kernel void mJDSxVec(__global const int *col,
 					   __global const double *data,
 					   __global const int *mJDS_row_permute,
 					   __global double *vin,
@@ -24,6 +24,29 @@ __kernel void mELLxVec(__global const int *col,
 		}
 		vout[mJDS_row_permute[gid+count_row_permute]] = sum;
 		// printf("CL--> gid: %d : %lf\n",gid,  vout[mJDS_row_permute[gid]]);
+	}
+}
+
+__kernel void mELLxVec(__global const int *rowptr,
+					   __global const int *col,
+					   __global const double *data,
+					   __global double *vin,
+					   __global double *vout,
+					   int rows,
+					   int elemsinrow)
+{		
+    int gid = get_global_id(0); 
+
+	if(gid < rows)
+	{
+		double sum = 0.0f;
+		int idx;
+		for (int j = 0; j < elemsinrow; j++)
+		{
+			idx = j * rows + gid;
+            sum += data[idx] * vin[col[idx]];
+		}
+		vout[gid] = sum;
 	}
 }
 
